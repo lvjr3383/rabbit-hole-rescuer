@@ -1,36 +1,46 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Rabbit Hole Rescuer
 
-## Getting Started
+Interrupt the drift with a tough-love tutor that turns YouTube binges into focused learning challenges.
 
-First, run the development server:
+## Quick Start
+
+```bash
+npm install
+```
+
+Create `.env.local`:
+
+```
+OPENAI_API_KEY=your_key_here
+```
+
+Run the app:
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open `http://localhost:3000`.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Demo Flow
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+1. Paste a YouTube link and click "I'm Drifting / Interrupt Me".
+2. If auto-fetch fails (common on Vercel), paste a transcript in the fallback box.
+3. The left pane locks and the agent presents the challenge on the right.
 
-## Learn More
+Tip: Use "Demo Mode" for a one-click walkthrough.
 
-To learn more about Next.js, take a look at the following resources:
+## API
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+`POST /api/challenge`
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+```json
+{
+  "url": "https://www.youtube.com/watch?v=...",
+  "transcript": "optional manual transcript"
+}
+```
 
-## Deploy on Vercel
+## Opik (Optional)
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+`OPIK_API_KEY` and `OPIK_WORKSPACE` are only needed if you run local evaluation scripts.
