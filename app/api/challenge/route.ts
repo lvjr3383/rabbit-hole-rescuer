@@ -81,7 +81,6 @@ export async function POST(request: Request) {
           ? "Note: Transcript was trimmed for speed. Prioritize the core ideas."
           : ""
       }`,
-      maxTokens: 600,
     });
 
     return NextResponse.json(object);
