@@ -9,23 +9,14 @@ import { twMerge } from "tailwind-merge";
 const cn = (...inputs: ClassValue[]) => twMerge(clsx(inputs));
 
 type SherpaResponse = {
-  analysis: {
-    topic: string;
-    difficulty_level: "Beginner" | "Intermediate" | "Advanced";
-  };
-  sherpa: {
-    explanation: string;
-    analogy: string;
-    prerequisite_recommendation: string[];
-    difficulty_warning: boolean;
-  };
-  quiz: {
-    questions: {
-      question: string;
-      answer: string;
-      explanation: string;
-    }[];
-  };
+  overview: string;
+  stuck_analysis: string;
+  recommendations: string[];
+  next_steps: string[];
+  flash_cards: {
+    front: string;
+    back: string;
+  }[];
 };
 
 const DEMO_URL = "https://www.youtube.com/watch?v=aircAruvnKk";
@@ -44,7 +35,7 @@ function extractVideoIdLocal(input: string): string {
 
 export default function Home() {
   const [url, setUrl] = useState("");
-  const [note, setNote] = useState("");
+  const [transcript, setTranscript] = useState("");
   const [timestamp, setTimestamp] = useState("");
   const [status, setStatus] = useState<"idle" | "loading" | "ready" | "error">(
     "idle",
@@ -73,11 +64,16 @@ export default function Home() {
           ? "Needs Input"
           : "Monitoring...";
 
-  const requestSherpa = async (mode: "lost" | "quiz") => {
+  const requestSherpa = async () => {
     setError(null);
     if (!url.trim()) {
       setStatus("error");
       setError("Paste a YouTube link to begin.");
+      return;
+    }
+    if (!transcript.trim()) {
+      setStatus("error");
+      setError("Paste the transcript so the Sherpa can guide you.");
       return;
     }
 
@@ -90,7 +86,7 @@ export default function Home() {
       const result = await fetch("/api/challenge", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ url, mode, note, timestamp }),
+        body: JSON.stringify({ url, transcript, timestamp }),
       });
       const data = await result.json();
       if (!result.ok) {
@@ -112,9 +108,11 @@ export default function Home() {
       return;
     }
     setUrl(DEMO_URL);
-    setNote("Backpropagation is confusing. What should I learn first?");
+    setTranscript(
+      "In this segment, the instructor introduces backpropagation as a way to update weights in a neural network. The chain rule is used to compute gradients step by step through the layers. The key idea is that you measure the error at the output and propagate it backward to adjust earlier layers.",
+    );
     setTimestamp("10:30");
-    await requestSherpa("lost");
+    await requestSherpa();
   };
 
   const handleResume = () => {
@@ -149,8 +147,9 @@ export default function Home() {
               A Sherpa for your learning rabbit holes.
             </h1>
             <p className="max-w-2xl text-base text-zinc-600 md:text-lg">
-              Drop a video link, tell us where you’re stuck, and the Sherpa
-              guides you back with explanations, analogies, and prerequisites.
+              Paste the transcript and (optionally) a timestamp. The Sherpa will
+              summarize the video, clarify the stuck point, and map the next
+              steps.
             </p>
           </header>
 
@@ -219,17 +218,17 @@ export default function Home() {
 
                   <div className="mt-5 space-y-3">
                     <label className="block text-xs uppercase tracking-[0.3em] text-zinc-600">
-                      Specific confusion (optional)
+                      Transcript (required)
                     </label>
                     <textarea
-                      value={note}
-                      onChange={(event) => setNote(event.target.value)}
-                      placeholder="E.g. Backpropagation math is confusing."
-                      className="min-h-[120px] w-full resize-none rounded-2xl border border-zinc-200 bg-white px-4 py-3 text-sm text-zinc-900 outline-none transition focus:border-purple-500/60 focus:ring-2 focus:ring-purple-200"
+                      value={transcript}
+                      onChange={(event) => setTranscript(event.target.value)}
+                      placeholder="Paste the full transcript here."
+                      className="min-h-[180px] w-full resize-none rounded-2xl border border-zinc-200 bg-white px-4 py-3 text-sm text-zinc-900 outline-none transition focus:border-purple-500/60 focus:ring-2 focus:ring-purple-200"
                     />
                     <p className="text-xs text-zinc-500">
-                      No transcript needed. A short note helps the Sherpa guide
-                      you faster.
+                      If your transcript includes timestamps, the Sherpa can
+                      focus on a specific moment.
                     </p>
                   </div>
 
@@ -250,28 +249,17 @@ export default function Home() {
                     </p>
                   </div>
 
-                  <div className="mt-6 grid gap-3 sm:grid-cols-2">
+                  <div className="mt-6">
                     <button
-                      onClick={() => requestSherpa("lost")}
+                      onClick={requestSherpa}
                       disabled={isLoading}
                       className={cn(
-                        "flex items-center justify-center gap-2 rounded-2xl border border-amber-200 bg-amber-100 px-4 py-3 text-sm font-semibold text-amber-800 transition hover:bg-amber-200",
+                        "flex w-full items-center justify-center gap-2 rounded-2xl border border-amber-200 bg-amber-100 px-4 py-3 text-sm font-semibold text-amber-800 transition hover:bg-amber-200",
                         isLoading && "cursor-not-allowed opacity-70",
                       )}
                     >
                       <Compass className="h-4 w-4" />
-                      I’m Lost
-                    </button>
-                    <button
-                      onClick={() => requestSherpa("quiz")}
-                      disabled={isLoading}
-                      className={cn(
-                        "flex items-center justify-center gap-2 rounded-2xl border border-purple-200 bg-purple-100 px-4 py-3 text-sm font-semibold text-purple-700 transition hover:bg-purple-200",
-                        isLoading && "cursor-not-allowed opacity-70",
-                      )}
-                    >
-                      <Sparkles className="h-4 w-4" />
-                      Quiz Me
+                      Rescue Me
                     </button>
                   </div>
 
@@ -343,81 +331,71 @@ export default function Home() {
 
                   {status === "ready" && response && (
                     <div className="space-y-5">
-                      <div className="flex flex-wrap items-center gap-2 text-xs uppercase tracking-[0.2em] text-purple-700">
-                        <span className="rounded-full border border-purple-200 bg-purple-100 px-3 py-1">
-                          {response.analysis.topic}
-                        </span>
-                        <span className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-emerald-700">
-                          {response.analysis.difficulty_level}
-                        </span>
-                      </div>
-
                       <div className="rounded-2xl border border-zinc-200 bg-white p-4">
                         <p className="text-xs uppercase tracking-[0.3em] text-zinc-500">
-                          Explanation
+                          Video Snapshot
                         </p>
                         <p className="mt-2 text-sm text-zinc-700">
-                          {response.sherpa.explanation}
+                          {response.overview}
                         </p>
-                        <p className="mt-3 text-sm text-zinc-600">
-                          <span className="font-semibold">Analogy:</span>{" "}
-                          {response.sherpa.analogy}
+                      </div>
+
+                      <div className="rounded-2xl border border-purple-200 bg-purple-50 p-4">
+                        <p className="text-xs uppercase tracking-[0.3em] text-purple-600">
+                          What’s Happening at the Stuck Point
+                        </p>
+                        <p className="mt-2 text-sm text-purple-800">
+                          {response.stuck_analysis}
                         </p>
                       </div>
 
                       <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
                         <p className="text-xs uppercase tracking-[0.3em] text-amber-700">
-                          Prerequisites to Review
+                          Rescue Map (Prerequisites)
                         </p>
                         <ul className="mt-3 list-disc space-y-1 pl-5">
-                          {response.sherpa.prerequisite_recommendation.map(
-                            (item) => (
-                              <li key={item}>{item}</li>
-                            ),
-                          )}
+                          {response.recommendations.map((item) => (
+                            <li key={item}>{item}</li>
+                          ))}
                         </ul>
-                        {response.sherpa.difficulty_warning && (
-                          <p className="mt-3 text-xs font-semibold uppercase tracking-[0.2em] text-amber-700">
-                            Advanced topic detected
-                          </p>
-                        )}
                       </div>
 
                       <div className="rounded-2xl border border-zinc-200 bg-zinc-50 p-4">
                         <p className="text-xs uppercase tracking-[0.3em] text-zinc-500">
-                          Test Yourself
+                          Next Steps
                         </p>
-                        <ol className="mt-3 list-decimal space-y-4 pl-5 text-sm text-zinc-800">
-                          {response.quiz.questions.map((item, idx) => (
-                            <li
-                              key={`${item.question}-${idx}`}
-                              className="space-y-2"
-                            >
+                        <ol className="mt-3 list-decimal space-y-2 pl-5 text-sm text-zinc-700">
+                          {response.next_steps.map((step) => (
+                            <li key={step}>{step}</li>
+                          ))}
+                        </ol>
+                      </div>
+
+                      <div className="rounded-2xl border border-zinc-200 bg-white p-4">
+                        <p className="text-xs uppercase tracking-[0.3em] text-zinc-500">
+                          Flash Cards
+                        </p>
+                        <ul className="mt-3 space-y-4 text-sm text-zinc-800">
+                          {response.flash_cards.map((card, idx) => (
+                            <li key={`${card.front}-${idx}`} className="space-y-2">
                               <p className="font-medium text-zinc-800">
-                                {item.question}
+                                {card.front}
                               </p>
                               <button
                                 onClick={() => toggleAnswer(idx)}
                                 className="text-xs font-semibold uppercase tracking-[0.2em] text-purple-600 transition hover:text-purple-800"
                                 type="button"
                               >
-                                {revealedAnswers[idx]
-                                  ? "Hide Answer"
-                                  : "Show Answer"}
+                                {revealedAnswers[idx] ? "Hide Card" : "Flip Card"}
                               </button>
                               {revealedAnswers[idx] && (
                                 <div className="rounded-xl border border-purple-200 bg-white p-3 text-sm text-zinc-700">
-                                  <p className="font-semibold text-zinc-800">
-                                    {item.answer}
-                                  </p>
-                                  <p className="mt-2 text-zinc-600">
-                                    {item.explanation}
-                                  </p>
+                                  {card.back}
                                 </div>
                               )}
                             </li>
                           ))}
-                        </ol>
+                        </ul>
                       </div>
 
                       <button

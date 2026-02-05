@@ -7,45 +7,36 @@ import { extractVideoId, fetchVideoTitle } from "@/app/lib/youtube";
 
 const requestSchema = z.object({
   url: z.string().optional(),
-  mode: z.enum(["lost", "quiz"]),
-  note: z.string().optional(),
+  transcript: z.string().min(1),
   timestamp: z.string().optional(),
 });
 
 const responseSchema = z.object({
-  analysis: z.object({
-    topic: z.string(),
-    difficulty_level: z.enum(["Beginner", "Intermediate", "Advanced"]),
-  }),
-  sherpa: z.object({
-    explanation: z.string(),
-    analogy: z.string(),
-    prerequisite_recommendation: z.array(z.string()).min(2).max(4),
-    difficulty_warning: z.boolean(),
-  }),
-  quiz: z.object({
-    questions: z
-      .array(
-        z.object({
-          question: z.string(),
-          answer: z.string(),
-          explanation: z.string(),
-        }),
-      )
-      .min(3)
-      .max(3),
-  }),
+  overview: z.string(),
+  stuck_analysis: z.string(),
+  recommendations: z.array(z.string()).min(2).max(5),
+  next_steps: z.array(z.string()).min(2).max(5),
+  flash_cards: z
+    .array(
+      z.object({
+        front: z.string(),
+        back: z.string(),
+      }),
+    )
+    .min(2)
+    .max(5),
 });
 
 const systemPrompt = [
-  "You are a friendly Sherpa tutor.",
-  "The user is watching a video with a given title and needs guidance.",
-  "Always provide a concise explanation and a simple analogy.",
-  "Always provide 2-4 prerequisite topics to learn first, even if the topic is beginner.",
-  "If the topic is advanced, set difficulty_warning=true.",
-  "If mode is 'lost', focus on explanation, analogy, and prerequisite guidance.",
-  "If mode is 'quiz', still give a short explanation but focus on 3 foundational questions.",
-  "Keep answers short, practical, and confidence-boosting.",
+  "You are a Sherpa tutor helping someone who got lost mid-video.",
+  "You have the full transcript and optional timestamp context.",
+  "Return a concise overview of the entire video.",
+  "Explain what is happening at the stuck point in plain English.",
+  "Provide 2-5 prerequisite recommendations so the user won't get lost again.",
+  "Provide a short 2-5 step micro-plan for what to do next.",
+  "Create 2-5 flash cards with short front/back prompts for quick recall.",
+  "If a timestamp is provided and the transcript includes timestamps, focus on the segment around that time.",
+  "If no timestamp or transcript timestamps exist, infer the likely confusing segment based on the transcript.",
 ].join(" ");
 
 export async function POST(request: Request) {
@@ -59,7 +50,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const { url, mode, note, timestamp } = parsed.data;
+    const { url, transcript, timestamp } = parsed.data;
     const videoId = url ? extractVideoId(url) : null;
     const title =
       (videoId ? await fetchVideoTitle(videoId) : null) ||
@@ -67,10 +58,11 @@ export async function POST(request: Request) {
 
     const prompt = [
       `Video title: "${title}".`,
-      note ? `User note: "${note}".` : "User note: (none).",
       timestamp ? `Timestamp: ${timestamp}.` : "Timestamp: (not provided).",
-      `Mode: ${mode}.`,
-      "Provide guidance based on the title, note, and timestamp context; do not claim you watched the exact moment.",
+      "Transcript (may be long):",
+      transcript,
+      "Provide guidance based on the title, transcript, and timestamp context.",
+      "Do not claim you watched the video; use the transcript only.",
     ].join("\n");
 
     const { object } = await generateObject({
@@ -85,38 +77,25 @@ export async function POST(request: Request) {
     console.error("challenge route failed", error);
     return NextResponse.json(
       {
-        analysis: { topic: "General Topic", difficulty_level: "Beginner" },
-        sherpa: {
-          explanation:
-            "I can still help even without the transcript. Tell me what part feels confusing.",
-          analogy:
-            "Learning a new topic is like hiking a trail — sometimes you just need a clearer map.",
-          prerequisite_recommendation: [
-            "Core definitions and vocabulary",
-            "A simple example problem",
-            "Why the topic matters in real life",
-          ],
-          difficulty_warning: false,
-        },
-        quiz: {
-          questions: [
-            {
-              question: "What is the core idea you are trying to learn?",
-              answer: "Define the main concept in one sentence.",
-              explanation: "Start with the simplest possible summary.",
-            },
-            {
-              question: "What is one term you do not understand?",
-              answer: "Pick a term and look up a quick definition.",
-              explanation: "Naming the gap makes it easier to fill.",
-            },
-            {
-              question: "How would you explain this to a friend?",
-              answer: "Use a real-world analogy or example.",
-              explanation: "If you can teach it, you understand it.",
-            },
-          ],
-        },
+        overview:
+          "I couldn't process the transcript just now. Please try again with a complete transcript.",
+        stuck_analysis:
+          "I need the transcript to pinpoint the moment you got stuck.",
+        recommendations: [
+          "Provide the transcript from the video",
+          "Include a timestamp if you have one",
+        ],
+        next_steps: ["Paste the transcript", "Submit again"],
+        flash_cards: [
+          {
+            front: "What is the topic?",
+            back: "Summarize the video in one sentence.",
+          },
+          {
+            front: "Where are you stuck?",
+            back: "Note the exact concept or timestamp.",
+          },
+        ],
       },
       { status: 200 },
     );
