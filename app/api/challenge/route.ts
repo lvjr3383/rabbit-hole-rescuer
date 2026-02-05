@@ -3,92 +3,120 @@ import { generateObject } from "ai";
 import { openai } from "@ai-sdk/openai";
 import { z } from "zod";
 
-import { extractVideoId, fetchTranscript } from "@/app/lib/youtube";
+import { extractVideoId, fetchVideoTitle } from "@/app/lib/youtube";
 
-const challengeSchema = z.object({
+const requestSchema = z.object({
+  url: z.string().optional(),
+  mode: z.enum(["lost", "quiz"]),
+  note: z.string().optional(),
+});
+
+const responseSchema = z.object({
   analysis: z.object({
-    content_type: z.enum(["educational", "entertainment"]),
     topic: z.string(),
+    difficulty_level: z.enum(["Beginner", "Intermediate", "Advanced"]),
   }),
-  challenge: z.object({
-    title: z.string(),
-    instructions: z.string(),
-    questions: z.array(z.string()).min(3).max(3),
+  sherpa: z.object({
+    explanation: z.string(),
+    analogy: z.string(),
+    prerequisite_recommendation: z.array(z.string()).min(2).max(4),
+    difficulty_warning: z.boolean(),
+  }),
+  quiz: z.object({
+    questions: z
+      .array(
+        z.object({
+          question: z.string(),
+          answer: z.string(),
+          explanation: z.string(),
+        }),
+      )
+      .min(3)
+      .max(3),
   }),
 });
 
 const systemPrompt = [
-  "You are a Tough Love Tutor.",
-  "Analyze the transcript and decide if it is educational or entertainment.",
-  "If educational: set analysis.content_type to 'educational' and provide exactly 3 Socratic questions that require deep understanding.",
-  "If entertainment: set analysis.content_type to 'entertainment', gently roast the user in the instructions, and still provide 3 reflective questions.",
-  "Keep the tone firm but helpful. Keep the output concise.",
+  "You are a friendly Sherpa tutor.",
+  "The user is watching a video with a given title and needs guidance.",
+  "Always provide a concise explanation and a simple analogy.",
+  "Always provide 2-4 prerequisite topics to learn first, even if the topic is beginner.",
+  "If the topic is advanced, set difficulty_warning=true.",
+  "If mode is 'lost', focus on explanation, analogy, and prerequisite guidance.",
+  "If mode is 'quiz', still give a short explanation but focus on 3 foundational questions.",
+  "Keep answers short, practical, and confidence-boosting.",
 ].join(" ");
-
-const MAX_TRANSCRIPT_CHARS = 5000;
-
-function normalizeTranscript(text: string) {
-  return text.replace(/\s+/g, " ").trim();
-}
-
-function trimTranscript(text: string) {
-  if (text.length <= MAX_TRANSCRIPT_CHARS) {
-    return { text, trimmed: false };
-  }
-  return { text: text.slice(0, MAX_TRANSCRIPT_CHARS), trimmed: true };
-}
 
 export async function POST(request: Request) {
   try {
-    const body = await request.json().catch(() => ({}));
-    const url = typeof body?.url === "string" ? body.url : "";
-    const manualTranscript =
-      typeof body?.transcript === "string" ? body.transcript.trim() : "";
-
-    let transcriptText = manualTranscript;
-
-    if (!transcriptText) {
-      const videoId = url ? extractVideoId(url) : null;
-      if (!videoId) {
-        return NextResponse.json(
-          { error: "Provide a valid YouTube link or paste the transcript." },
-          { status: 400 },
-        );
-      }
-
-      transcriptText = (await fetchTranscript(videoId)) ?? "";
-    }
-
-    if (!transcriptText) {
+    const json = await request.json().catch(() => ({}));
+    const parsed = requestSchema.safeParse(json);
+    if (!parsed.success) {
       return NextResponse.json(
-        {
-          error:
-            "Transcript fetch failed or is unavailable for this video. Paste the transcript manually or use Demo Mode.",
-        },
+        { error: "Invalid request." },
         { status: 400 },
       );
     }
 
-    const normalized = normalizeTranscript(transcriptText);
-    const { text: trimmedTranscript, trimmed } = trimTranscript(normalized);
+    const { url, mode, note } = parsed.data;
+    const videoId = url ? extractVideoId(url) : null;
+    const title =
+      (videoId ? await fetchVideoTitle(videoId) : null) ||
+      "a topic you are learning right now";
+
+    const prompt = [
+      `Video title: "${title}".`,
+      note ? `User note: "${note}".` : "User note: (none).",
+      `Mode: ${mode}.`,
+      "Provide guidance based on the title and note; do not reference timestamps.",
+    ].join("\n");
 
     const { object } = await generateObject({
       model: openai("gpt-4o"),
-      schema: challengeSchema,
+      schema: responseSchema,
       system: systemPrompt,
-      prompt: `Transcript (may be truncated):\n${trimmedTranscript}\n\n${
-        trimmed
-          ? "Note: Transcript was trimmed for speed. Prioritize the core ideas."
-          : ""
-      }`,
+      prompt,
     });
 
     return NextResponse.json(object);
   } catch (error) {
     console.error("challenge route failed", error);
     return NextResponse.json(
-      { error: "Unable to generate a challenge right now." },
-      { status: 500 },
+      {
+        analysis: { topic: "General Topic", difficulty_level: "Beginner" },
+        sherpa: {
+          explanation:
+            "I can still help even without the transcript. Tell me what part feels confusing.",
+          analogy:
+            "Learning a new topic is like hiking a trail — sometimes you just need a clearer map.",
+          prerequisite_recommendation: [
+            "Core definitions and vocabulary",
+            "A simple example problem",
+            "Why the topic matters in real life",
+          ],
+          difficulty_warning: false,
+        },
+        quiz: {
+          questions: [
+            {
+              question: "What is the core idea you are trying to learn?",
+              answer: "Define the main concept in one sentence.",
+              explanation: "Start with the simplest possible summary.",
+            },
+            {
+              question: "What is one term you do not understand?",
+              answer: "Pick a term and look up a quick definition.",
+              explanation: "Naming the gap makes it easier to fill.",
+            },
+            {
+              question: "How would you explain this to a friend?",
+              answer: "Use a real-world analogy or example.",
+              explanation: "If you can teach it, you understand it.",
+            },
+          ],
+        },
+      },
+      { status: 200 },
     );
   }
 }

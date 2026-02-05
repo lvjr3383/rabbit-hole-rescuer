@@ -18,6 +18,37 @@ export async function fetchTranscript(videoId: string): Promise<string | null> {
   }
 }
 
+export async function fetchVideoTitle(videoId: string): Promise<string | null> {
+  if (!videoId) {
+    return null;
+  }
+
+  const videoUrl = `https://www.youtube.com/watch?v=${videoId}`;
+  const sources = [
+    `https://www.youtube.com/oembed?url=${encodeURIComponent(
+      videoUrl,
+    )}&format=json`,
+    `https://noembed.com/embed?url=${encodeURIComponent(videoUrl)}`,
+  ];
+
+  for (const source of sources) {
+    try {
+      const response = await fetch(source);
+      if (!response.ok) {
+        continue;
+      }
+      const data = (await response.json()) as { title?: string };
+      if (data?.title) {
+        return data.title;
+      }
+    } catch {
+      // Try next source.
+    }
+  }
+
+  return null;
+}
+
 export function extractVideoId(input: string): string | null {
   const trimmed = input.trim();
   if (!trimmed) {
