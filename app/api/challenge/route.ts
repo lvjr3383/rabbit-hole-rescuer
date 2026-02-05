@@ -9,6 +9,7 @@ const requestSchema = z.object({
   url: z.string().optional(),
   mode: z.enum(["lost", "quiz"]),
   note: z.string().optional(),
+  timestamp: z.string().optional(),
 });
 
 const responseSchema = z.object({
@@ -58,7 +59,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const { url, mode, note } = parsed.data;
+    const { url, mode, note, timestamp } = parsed.data;
     const videoId = url ? extractVideoId(url) : null;
     const title =
       (videoId ? await fetchVideoTitle(videoId) : null) ||
@@ -67,8 +68,9 @@ export async function POST(request: Request) {
     const prompt = [
       `Video title: "${title}".`,
       note ? `User note: "${note}".` : "User note: (none).",
+      timestamp ? `Timestamp: ${timestamp}.` : "Timestamp: (not provided).",
       `Mode: ${mode}.`,
-      "Provide guidance based on the title and note; do not reference timestamps.",
+      "Provide guidance based on the title, note, and timestamp context; do not claim you watched the exact moment.",
     ].join("\n");
 
     const { object } = await generateObject({

@@ -45,6 +45,7 @@ function extractVideoIdLocal(input: string): string {
 export default function Home() {
   const [url, setUrl] = useState("");
   const [note, setNote] = useState("");
+  const [timestamp, setTimestamp] = useState("");
   const [status, setStatus] = useState<"idle" | "loading" | "ready" | "error">(
     "idle",
   );
@@ -89,7 +90,7 @@ export default function Home() {
       const result = await fetch("/api/challenge", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ url, mode, note }),
+        body: JSON.stringify({ url, mode, note, timestamp }),
       });
       const data = await result.json();
       if (!result.ok) {
@@ -112,6 +113,7 @@ export default function Home() {
     }
     setUrl(DEMO_URL);
     setNote("Backpropagation is confusing. What should I learn first?");
+    setTimestamp("10:30");
     await requestSherpa("lost");
   };
 
@@ -228,6 +230,23 @@ export default function Home() {
                     <p className="text-xs text-zinc-500">
                       No transcript needed. A short note helps the Sherpa guide
                       you faster.
+                    </p>
+                  </div>
+
+                  <div className="mt-4 space-y-3">
+                    <label className="block text-xs uppercase tracking-[0.3em] text-zinc-600">
+                      Timestamp (optional)
+                    </label>
+                    <input
+                      value={timestamp}
+                      onChange={(event) => setTimestamp(event.target.value)}
+                      type="text"
+                      placeholder="e.g. 10:30"
+                      className="w-full rounded-2xl border border-zinc-200 bg-white px-4 py-3 text-sm text-zinc-900 outline-none transition focus:border-purple-500/60 focus:ring-2 focus:ring-purple-200"
+                    />
+                    <p className="text-xs text-zinc-500">
+                      Helps the Sherpa frame guidance around the moment you got
+                      stuck.
                     </p>
                   </div>
 
